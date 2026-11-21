@@ -1622,8 +1622,6 @@ class WebAppHandler(http.server.SimpleHTTPRequestHandler):
 
         if parsed.path == '/' or parsed.path == '/index.html':
             html_path = os.path.join(os.path.dirname(__file__), "index.html")
-            if not os.path.exists(html_path):
-                html_path = os.path.join(os.path.dirname(__file__), "amplify_deploy", "index.html")
             if os.path.exists(html_path):
                 with open(html_path, "rb") as f:
                     content = f.read()
