@@ -718,17 +718,63 @@
                 </div>
             </div>
 
-            <!-- Gráfica de Payoff -->
-            <div style="font-size: 11.5px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.05em;">
-                Curva de Payoff al Vencimiento (Pérdidas y Ganancias):
-            </div>
-            <div class="chart-box">
-                <canvas id="chartPnL"></canvas>
+            <!-- GRÁFICA 1: DISTRIBUCIÓN DE PROBABILIDAD (CAMPANA DE GAUSS) Y VaR -->
+            <div style="margin-top: 10px; margin-bottom: 26px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+                    <div>
+                        <div style="font-size: 12.5px; font-weight: 700; text-transform: uppercase; color: #ffffff; letter-spacing: 0.05em;">
+                            Distribución de Probabilidad del VaR (Campana de Gauss)
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;">
+                            Distribución normal de pérdidas y ganancias con delimitación de colas al 95% y 99%.
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 6px; font-size: 10.5px; flex-wrap: wrap;">
+                        <span style="color: #f43f5e; background: rgba(244, 63, 94, 0.15); padding: 3px 8px; border-radius: 4px; font-weight: 600;">■ Pérdida Extrema (&gt; VaR 99%)</span>
+                        <span style="color: #ffaa5a; background: rgba(255, 170, 90, 0.15); padding: 3px 8px; border-radius: 4px; font-weight: 600;">■ Nivel Crítico (VaR 95%)</span>
+                        <span style="color: #60a5fa; background: rgba(96, 165, 250, 0.15); padding: 3px 8px; border-radius: 4px; font-weight: 600;">■ Intervalo de Confianza</span>
+                    </div>
+                </div>
+                <div class="chart-box">
+                    <canvas id="chartGauss"></canvas>
+                </div>
             </div>
 
-            <!-- Tabla de Escenarios P&L -->
-            <div style="font-size: 11.5px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.05em;">
-                Matriz de Proyección de P&L al Vencimiento (-15% a +15%):
+            <!-- GRÁFICA 2: MATRIZ DE ESCENARIOS DE P&L -->
+            <div style="margin-bottom: 26px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+                    <div>
+                        <div style="font-size: 12.5px; font-weight: 700; text-transform: uppercase; color: #ffffff; letter-spacing: 0.05em;">
+                            Gráfica de Escenarios de la Matriz de P&L (-15% a +15%)
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;">
+                            Impacto monetario neto en MXN y rendimiento porcentual proyectado por escenario.
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 6px; font-size: 10.5px; flex-wrap: wrap;">
+                        <span style="color: var(--gain); background: rgba(16, 185, 129, 0.15); padding: 3px 8px; border-radius: 4px; font-weight: 600;">■ Ganancia Neta</span>
+                        <span style="color: var(--loss); background: rgba(244, 63, 94, 0.15); padding: 3px 8px; border-radius: 4px; font-weight: 600;">■ Pérdida Neta</span>
+                        <span style="color: #ffaa5a; background: rgba(255, 170, 90, 0.15); padding: 3px 8px; border-radius: 4px; font-weight: 600;">-- Rendimiento %</span>
+                    </div>
+                </div>
+                <div class="chart-box">
+                    <canvas id="chartPnLMatrix"></canvas>
+                </div>
+            </div>
+
+            <!-- GRÁFICA 3: CURVA CONTINUA DE PAYOFF -->
+            <div style="margin-bottom: 26px;">
+                <div style="font-size: 12.5px; font-weight: 700; text-transform: uppercase; color: #ffffff; letter-spacing: 0.05em; margin-bottom: 10px;">
+                    Curva Continua de Payoff al Vencimiento
+                </div>
+                <div class="chart-box">
+                    <canvas id="chartPnL"></canvas>
+                </div>
+            </div>
+
+            <!-- TABLA DE LA MATRIZ DE P&L -->
+            <div style="font-size: 12.5px; font-weight: 700; text-transform: uppercase; color: #ffffff; letter-spacing: 0.05em; margin-bottom: 10px;">
+                Tabla Detallada de la Matriz de P&L (-15% a +15%)
             </div>
             <div class="table-responsive">
                 <table id="tablaPnL">
@@ -808,6 +854,8 @@
         };
 
         let chartInstance = null;
+        let gaussChartInstance = null;
+        let pnlMatrixChartInstance = null;
 
         window.addEventListener("DOMContentLoaded", () => {
             initCurrencyBar();
@@ -1105,6 +1153,7 @@
 
             const chartLabels = [];
             const chartData = [];
+            const chartRends = [];
 
             variaciones.forEach(v => {
                 const st = parseFloat((fwdPrecio * (1 + v)).toFixed(4));
@@ -1116,6 +1165,7 @@
 
                 chartLabels.push(`${v > 0 ? '+' : ''}${(v*100).toFixed(0)}%`);
                 chartData.push(pnlNeto);
+                chartRends.push(parseFloat(rendPct.toFixed(2)));
 
                 const tr = document.createElement("tr");
                 tr.innerHTML = `
@@ -1138,7 +1188,13 @@
                 tbody.appendChild(tr);
             });
 
-            // Gráfica
+            // 1. Gráfica de Campana de Gauss y delimitación de VaR
+            renderGaussChart(sigma10d, nominalCotizada, varP95, varP99, m.cotizada);
+
+            // 2. Gráfica de la Matriz de Escenarios de P&L (-15% a +15%)
+            renderPnLMatrixChart(chartLabels, chartData, chartRends, m.cotizada);
+
+            // 3. Gráfica de Curva continua de Payoff
             renderChart(chartLabels, chartData, m.cotizada);
 
             // Mostrar sección
@@ -1147,6 +1203,184 @@
             seccion.scrollIntoView({ behavior: 'smooth' });
         }
 
+        // GRÁFICA 1: CAMPANA DE GAUSS Y DISTRIBUCIÓN DEL VAR
+        function renderGaussChart(sigma10d, nominalCotizada, varP95, varP99, cotizada) {
+            const ctx = document.getElementById("chartGauss").getContext("2d");
+            if (gaussChartInstance) gaussChartInstance.destroy();
+
+            const zPoints = [];
+            const labels = [];
+            const pnlAmounts = [];
+            const pdfPoints = [];
+            const barColors = [];
+
+            for (let z = -3.5; z <= 3.51; z += 0.25) {
+                const zVal = parseFloat(z.toFixed(2));
+                const pnl = Math.round(zVal * sigma10d * nominalCotizada);
+                const pdf = (1.0 / Math.sqrt(2.0 * Math.PI)) * Math.exp(-0.5 * zVal * zVal);
+
+                zPoints.push(zVal);
+                labels.push(`${zVal > 0 ? '+' : ''}${zVal.toFixed(1)}σ ($${(pnl / 1000).toFixed(0)}k)`);
+                pnlAmounts.push(pnl);
+                pdfPoints.push(parseFloat(pdf.toFixed(4)));
+
+                if (zVal <= -2.326) {
+                    barColors.push("rgba(244, 63, 94, 0.75)"); // Riesgo extremo 99%
+                } else if (zVal <= -1.645) {
+                    barColors.push("rgba(255, 170, 90, 0.75)"); // Riesgo crítico 95%
+                } else {
+                    barColors.push("rgba(59, 130, 246, 0.35)"); // Confianza
+                }
+            }
+
+            gaussChartInstance = new Chart(ctx, {
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            type: 'line',
+                            label: 'Campana de Gauss Teórica N(μ, σ)',
+                            data: pdfPoints,
+                            borderColor: '#ff7a1a',
+                            borderWidth: 2.5,
+                            fill: false,
+                            tension: 0.35,
+                            pointRadius: 2,
+                            pointBackgroundColor: '#ff7a1a',
+                            yAxisID: 'y'
+                        },
+                        {
+                            type: 'bar',
+                            label: 'Frecuencia de Pérdidas y Ganancias',
+                            data: pdfPoints,
+                            backgroundColor: barColors,
+                            borderRadius: 4,
+                            barPercentage: 0.9,
+                            yAxisID: 'y'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: ctx => `Punto en la Distribución: ${ctx[0].label}`,
+                                label: ctx => {
+                                    const idx = ctx.dataIndex;
+                                    const pnl = pnlAmounts[idx];
+                                    const z = zPoints[idx];
+                                    let zona = "Zona de Confianza Operativa (95%)";
+                                    if (z <= -2.326) zona = "Zona de Pérdida Extrema (> VaR 99%)";
+                                    else if (z <= -1.645) zona = "Nivel Crítico de Pérdida (VaR 95%)";
+                                    return [
+                                        `P&L Estimado: ${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString('es-MX')} ${cotizada}`,
+                                        `Clasificación: ${zona}`,
+                                        `Densidad f(z): ${ctx.parsed.y.toFixed(4)}`
+                                    ];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255,255,255,0.03)' },
+                            ticks: {
+                                color: '#8d90a5',
+                                font: { size: 9 },
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        },
+                        y: {
+                            display: false,
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        // GRÁFICA 2: MATRIZ DE ESCENARIOS DE P&L
+        function renderPnLMatrixChart(labels, pnlValues, rendValues, cotizada) {
+            const ctx = document.getElementById("chartPnLMatrix").getContext("2d");
+            if (pnlMatrixChartInstance) pnlMatrixChartInstance.destroy();
+
+            const barColors = pnlValues.map(v => v > 0.01 ? '#10b981' : (v < -0.01 ? '#f43f5e' : '#8d90a5'));
+
+            pnlMatrixChartInstance = new Chart(ctx, {
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: `P&L Neto (${cotizada})`,
+                            data: pnlValues,
+                            backgroundColor: barColors,
+                            borderRadius: 6,
+                            yAxisID: 'y'
+                        },
+                        {
+                            type: 'line',
+                            label: 'Rendimiento (%)',
+                            data: rendValues,
+                            borderColor: '#ffaa5a',
+                            borderWidth: 2,
+                            borderDash: [4, 4],
+                            pointRadius: 4,
+                            pointBackgroundColor: '#ffaa5a',
+                            fill: false,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => {
+                                    if (ctx.dataset.type === 'bar') {
+                                        return `P&L Neto: ${ctx.parsed.y >= 0 ? '+' : ''}$${ctx.parsed.y.toLocaleString('es-MX', {minimumFractionDigits: 2})} ${cotizada}`;
+                                    } else {
+                                        return `Rendimiento: ${ctx.parsed.y >= 0 ? '+' : ''}${ctx.parsed.y.toFixed(2)}%`;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255,255,255,0.04)' },
+                            ticks: { color: '#8d90a5', font: { size: 10.5 } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255,255,255,0.04)' },
+                            ticks: {
+                                color: '#8d90a5',
+                                font: { size: 10 },
+                                callback: val => `$${(val / 1000).toFixed(0)}k`
+                            }
+                        },
+                        y1: {
+                            position: 'right',
+                            grid: { display: false },
+                            ticks: {
+                                color: '#ffaa5a',
+                                font: { size: 10 },
+                                callback: val => `${val.toFixed(0)}%`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // GRÁFICA 3: CURVA CONTINUA DE PAYOFF
         function renderChart(labels, data, cotizada) {
             const ctx = document.getElementById("chartPnL").getContext("2d");
             if (chartInstance) chartInstance.destroy();
