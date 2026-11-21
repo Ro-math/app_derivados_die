@@ -1,30 +1,6 @@
-"""
-=============================================================================
-APLICACIÓN DE COTIZACIÓN DE DERIVADOS FX (USD/MXN), CURVA IMPLÍCITA Y VaR
-=============================================================================
-Mesa de Derivados y Gestión de Riesgos Financieros
-Desarrollado para el análisis de Tipo de Cambio Dólar-Peso (USD/MXN).
-
-Funcionalidades:
-1. Cotización de Compra/Venta sobre tipo de cambio USD/MXN con Bid/Ask spread.
-2. Ingreso de plazo (limitado a 2 años / 730 días) y cálculo de nominales en USD y MXN.
-3. Asignación automática de derivado según el plazo:
-   - Corto plazo (<= 2 días): FX Spot (Cash T+0, Tom T+1, Spot T+2).
-   - Mayor a 2 días (> 2 días): Asigna FX Swap y ofrece alternativa de FX Forward a 1 mes.
-4. Valuación con la Curva Forward en Pesos y Curva Implícita en Pesos (Covered Interest Parity):
-   - Cotización en Puntos F (Forward Points en centavos y pips).
-   - Construcción de la Curva de Tasas Implícitas en Pesos a partir del diferencial cambiario.
-5. Si el cliente acepta el derivado:
-   - Resumen ejecutivo formal de la operación.
-   - Proyecciones de Pérdidas y Ganancias (P&L) en múltiples escenarios de tipo de cambio al vencimiento.
-   - Gráfica de Payoff del derivado.
-   - Cálculo integral de Value at Risk (VaR):
-     * VaR Paramétrico (95% y 99% a 1 día, 10 días y al vencimiento).
-     * VaR Histórico (95% y 99%).
-     * VaR Montecarlo (12,500 simulaciones).
-     * Gráfica de distribución de VaR.
-=============================================================================
-"""
+# Cotizador de derivados de tipo de cambio, paridad de tasas CIP y gestion de riesgo (VaR)
+# Proyecto de Administracion de Riesgos Financieros
+# Incluye cotizacion en vivo con Yahoo Finance, los 5 derivados y medicion de VaR
 
 import os
 import sys

@@ -1,27 +1,17 @@
-"""
-=============================================================================
-MOTOR CUANTITATIVO DE DERIVADOS Y ESTRATEGIAS FX
-=============================================================================
-Valuación de:
-1. FX Spot (Cash T+0, Tom T+1, Spot T+2, Tom-Next, Spot-Next)
-2. FX Swap (Swap Points y Tasa Implícita CIP)
-3. FX Forward OTC (Paridad Cubierta de Tasas CIP y Puntos F)
-4. Futuros FX (MexDer / CME con Margen Inicial y MTM)
-5. Opciones FX (Garman-Kohlhagen: Call y Put con primas y griegas)
-=============================================================================
-"""
+# Valuacion de derivados de tipo de cambio y analisis de riesgo
+# Se cotizan las 5 opciones: Spot, Swap cambiario, Forward CIP, Futuros MexDer y Opciones Garman-Kohlhagen
 
 import math
 import numpy as np
 from datetime import datetime, timedelta
 
+# Aproximacion analitica de la normal acumulada con la funcion erf
 def norm_cdf(x):
-    """Función de distribución acumulada de la normal estándar (precisión analítica de Abramowitz-Stegun)."""
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
 
+# Interpolamos linealmente las tasas locales y extranjeras para los dias solicitados
 def interpolar_tasas(plazo_dias, curva_local, curva_ext):
-    """Interpola linealmente las tasas locales y extranjeras según el plazo."""
     t = max(1, min(plazo_dias, 730))
     dias_loc = sorted(curva_local.keys())
     tasas_loc = [curva_local[d] for d in dias_loc]
@@ -33,23 +23,17 @@ def interpolar_tasas(plazo_dias, curva_local, curva_ext):
     return r_loc, r_ext
 
 
+# Cotizamos simultaneamente las 5 opciones de cobertura e inversion que nos pidio el profe
 def cotizar_estrategias_completas(mercado_info, operacion="compra", plazo_dias=30, nominal_base=100000.0):
-    """
-    Cotiza simultáneamente las 5 opciones de inversión / cobertura solicitadas por el profesor:
-    1. FX Spot
-    2. FX Forward
-    3. FX Swap
-    4. Futuro FX
-    5. Opciones FX (Garman-Kohlhagen)
-    """
     es_compra = (operacion.lower() in ["compra", "c", "buy"])
     spot_mid = mercado_info["spot_mid"]
+    # Si el cliente compra le damos el precio ask, si vende le damos el precio bid
     spot_base = mercado_info["spot_ask"] if es_compra else mercado_info["spot_bid"]
     vol_anual = mercado_info["volatilidad_anual"]
     simb_base = mercado_info["simbolo_base"]
     simb_cot = mercado_info["simbolo_cotizada"]
 
-    # Validación de límite normativo
+    # Validamos que no exceda el limite normativo de riesgo (2 anos / 730 dias)
     plazo_solicitado = plazo_dias
     alerta_plazo = ""
     if plazo_dias > 730:
@@ -61,24 +45,20 @@ def cotizar_estrategias_completas(mercado_info, operacion="compra", plazo_dias=3
     r_loc, r_ext = interpolar_tasas(plazo_dias, mercado_info["curva_local"], mercado_info["curva_ext"])
     T = max(plazo_dias, 1) / 360.0
 
-    # -------------------------------------------------------------------------
-    # 1. FX Forward por Paridad Cubierta de Tasas (CIP)
-    # -------------------------------------------------------------------------
+    # 1. Forward por Paridad Cubierta de Tasas (CIP): F = S * (1 + r_loc * T) / (1 + r_ext * T)
     factor_loc = 1.0 + r_loc * T
     factor_ext = 1.0 + r_ext * T
     fwd_precio = round(spot_base * (factor_loc / factor_ext), 4)
     puntos_f = round(fwd_precio - spot_base, 4)
     puntos_pips = round(puntos_f * 10000.0, 1)
 
-    # Tasa implícita de fondeo en pesos (CIP)
+    # Despejamos la tasa implicita de fondeo en pesos (CIP)
     tasa_implicita = ((fwd_precio / spot_base) * factor_ext - 1.0) / T if T > 0 else r_loc
 
-    # -------------------------------------------------------------------------
-    # 2. Opciones FX (Modelo Garman-Kohlhagen 1983)
-    # -------------------------------------------------------------------------
-    strike = fwd_precio  # Opción At-The-Money Forward
+    # 2. Opciones sobre tipo de cambio con Garman-Kohlhagen (1983)
+    strike = fwd_precio  # Opcion at the money forward
     sigma = max(vol_anual, 0.05)
-    T_opcion = max(plazo_dias, 1) / 365.0  # Base año continuo para Black-Scholes
+    T_opcion = max(plazo_dias, 1) / 365.0  # Base continua para Black-Scholes
 
     d1 = (math.log(spot_base / strike) + (r_loc - r_ext + 0.5 * sigma**2) * T_opcion) / (sigma * math.sqrt(T_opcion))
     d2 = d1 - sigma * math.sqrt(T_opcion)
@@ -88,7 +68,7 @@ def cotizar_estrategias_completas(mercado_info, operacion="compra", plazo_dias=3
     n_minus_d1 = norm_cdf(-d1)
     n_minus_d2 = norm_cdf(-d2)
 
-    # Descuentos continuos
+    # Factores de descuento continuo
     disc_ext = math.exp(-r_ext * T_opcion)
     disc_loc = math.exp(-r_loc * T_opcion)
 
@@ -107,15 +87,11 @@ def cotizar_estrategias_completas(mercado_info, operacion="compra", plazo_dias=3
     prima_total = round(nominal_base * prima_unitaria, 2)
     prima_pct = round((prima_unitaria / spot_base) * 100.0, 2)
 
-    # -------------------------------------------------------------------------
-    # 3. Futuros FX (MexDer / CME)
-    # -------------------------------------------------------------------------
-    margen_garantia_pct = 0.06  # 6% de Margen Inicial (AIM) típico en MexDer
+    # 3. Futuros en MexDer: calculamos el margen de garantia inicial (AIM) del 6%
+    margen_garantia_pct = 0.06
     margen_inicial_total = round(nominal_base * fwd_precio * margen_garantia_pct, 2)
 
-    # -------------------------------------------------------------------------
-    # 4. Asignación de Plazos Interbancarios
-    # -------------------------------------------------------------------------
+    # 4. Asignamos la convencion interbancaria del plazo (Cash, Tom, Spot, etc.)
     if plazo_dias == 0:
         convencion_plazo = "Cash (T+0 - Mismo Día)"
     elif plazo_dias == 1:
@@ -141,12 +117,10 @@ def cotizar_estrategias_completas(mercado_info, operacion="compra", plazo_dias=3
     else:
         convencion_plazo = "2 Años (2Y - Límite Máximo)"
 
-    # -------------------------------------------------------------------------
-    # Construir Catálogo de las 5 Opciones
-    # -------------------------------------------------------------------------
+    # Armamos la lista con las 5 opciones para que el cliente compare
     opciones_catalogo = []
 
-    # Opción 1: FX Spot
+    # Opcion 1: FX Spot directo
     es_spot_viable = (plazo_dias <= 2)
     opciones_catalogo.append({
         "id": "spot",
@@ -158,13 +132,13 @@ def cotizar_estrategias_completas(mercado_info, operacion="compra", plazo_dias=3
         "garantia": 0.0,
         "tasa_impl": r_loc,
         "nominal_cotizada": round(nominal_base * spot_base, 2),
-        "descripcion": "Intercambio de divisas al contado directo. Sin costos de financiamiento ni puntos forward.",
-        "perfil_riesgo": "Exposición total al tipo de cambio de mercado al momento del pacto.",
+        "descripcion": "Intercambio directo de divisas. No hay costo por diferencial de tasas ni puntos forward.",
+        "perfil_riesgo": "Exposición total al tipo de cambio de mercado en la fecha valor pactada.",
         "es_recomendada": es_spot_viable,
-        "razon_recomendacion": "Plazo de 2 días o menos: La convención estándar de mercado Spot/Cash es la opción óptima sin incurrir en swaps." if es_spot_viable else ""
+        "razon_recomendacion": "Plazo de 2 días o menos: La convención estándar Spot/Cash es la opción óptima directa." if es_spot_viable else ""
     })
 
-    # Opción 2: FX Swap
+    # Opcion 2: FX Swap cambiario
     es_swap_viable = (plazo_dias > 2 and plazo_dias <= 180)
     opciones_catalogo.append({
         "id": "swap",
@@ -176,13 +150,13 @@ def cotizar_estrategias_completas(mercado_info, operacion="compra", plazo_dias=3
         "garantia": 0.0,
         "tasa_impl": tasa_implicita,
         "nominal_cotizada": round(nominal_base * fwd_precio, 2),
-        "descripcion": f"Pacta simultáneamente la compra/venta spot y su reversa a futuro. Elimina el riesgo cambiario neto y permite fondearse a la tasa implícita ({tasa_implicita*100:.2f}%).",
-        "perfil_riesgo": "Riesgo cambiario CERO (fondos cubiertos en ambas fechas). Solo sujeto a riesgo de liquidez y tasas.",
+        "descripcion": f"Pactamos spot hoy y la reversa a futuro. Quita el riesgo cambiario neto y permite fondearse al {tasa_implicita*100:.2f}%.",
+        "perfil_riesgo": "Riesgo cambiario CERO porque los flujos quedan cerrados en ambas fechas.",
         "es_recomendada": es_swap_viable,
-        "razon_recomendacion": f"Plazo intermedio ({plazo_dias}d): Ideal para tesorerías que buscan mover divisas y fondearse sin riesgo cambiario." if es_swap_viable else ""
+        "razon_recomendacion": f"Plazo de {plazo_dias} días: Ideal para tesorerías que mueven liquidez sin especular con el tipo de cambio." if es_swap_viable else ""
     })
 
-    # Opción 3: FX Forward OTC
+    # Opcion 3: FX Forward OTC
     es_fwd_viable = (plazo_dias > 2 and not es_swap_viable)
     opciones_catalogo.append({
         "id": "forward",
@@ -194,13 +168,13 @@ def cotizar_estrategias_completas(mercado_info, operacion="compra", plazo_dias=3
         "garantia": 0.0,
         "tasa_impl": tasa_implicita,
         "nominal_cotizada": round(nominal_base * fwd_precio, 2),
-        "descripcion": f"Congela el tipo de cambio futuro a ${fwd_precio:.4f} MXN. Sin desembolso inicial. 100% de certidumbre para presupuestos y flujos futuros.",
-        "perfil_riesgo": "Cobertura simétrica total. Elimina pérdidas por devaluación, pero renuncia a ganancias si el tipo de cambio mejora.",
+        "descripcion": f"Congela el tipo de cambio futuro a ${fwd_precio:.4f} MXN sin costo inicial. Certeza total para presupuesto.",
+        "perfil_riesgo": "Cobertura simetrica. Si el dolar sube te proteges, pero si baja no aprovechas la ganancia.",
         "es_recomendada": es_fwd_viable,
-        "razon_recomendacion": f"Plazo largo ({plazo_dias}d): Cobertura formal sin costo inicial para congelar flujos exactos." if es_fwd_viable else ""
+        "razon_recomendacion": f"Plazo largo ({plazo_dias}d): Cobertura formal que asegura el flujo futuro exacto." if es_fwd_viable else ""
     })
 
-    # Opción 4: Futuro FX
+    # Opcion 4: Futuro en bolsa (MexDer / CME)
     opciones_catalogo.append({
         "id": "futuro",
         "nombre": "Futuro FX (MexDer / CME)",
@@ -211,13 +185,13 @@ def cotizar_estrategias_completas(mercado_info, operacion="compra", plazo_dias=3
         "garantia": margen_inicial_total,
         "tasa_impl": tasa_implicita,
         "nominal_cotizada": round(nominal_base * fwd_precio, 2),
-        "descripcion": f"Negociado en bolsa organizada con liquidación diaria Mark-to-Market (MTM) y Cámara de Compensación. Requiere Aportación Inicial Mínima (AIM) de ${margen_inicial_total:,.2f} MXN (6%).",
-        "perfil_riesgo": "Sin riesgo de crédito de contraparte gracias a la Cámara. Requiere liquidez diaria para llamadas de margen.",
+        "descripcion": f"Contrato bursatil con liquidacion diaria de perdidas y ganancias (MTM). Requiere aportacion de garantia de ${margen_inicial_total:,.2f} MXN (6%).",
+        "perfil_riesgo": "Sin riesgo de contraparte por la Camara de Compensacion, pero exige liquidez diaria para llamadas de margen.",
         "es_recomendada": False,
         "razon_recomendacion": ""
     })
 
-    # Opción 5: Opciones FX (Garman-Kohlhagen)
+    # Opcion 5: Opciones sobre tipo de cambio (Garman-Kohlhagen)
     opciones_catalogo.append({
         "id": "opcion",
         "nombre": f"Opción FX ({tipo_opcion})",
@@ -230,10 +204,10 @@ def cotizar_estrategias_completas(mercado_info, operacion="compra", plazo_dias=3
         "nominal_cotizada": round(nominal_base * strike, 2),
         "prima_pct": prima_pct,
         "delta": round(delta, 3),
-        "descripcion": f"Seguro cambiario: Derecho pero no obligación. Paga una prima de ${prima_total:,.2f} MXN ({prima_pct}%). Si el mercado se mueve en contra, tu pérdida máxima es la prima; si favorece, participas de ganancias ilimitadas.",
-        "perfil_riesgo": "Riesgo asimétrico acotado estrictamente a la prima pagada.",
+        "descripcion": f"Funciona como un seguro: pagas una prima de ${prima_total:,.2f} MXN ({prima_pct}%). Tu perdida maxima es la prima y tus ganancias son ilimitadas si el mercado se mueve a favor.",
+        "perfil_riesgo": "Riesgo asimetrico acotado a la prima pagada.",
         "es_recomendada": (plazo_dias >= 14 and not es_swap_viable and not es_fwd_viable),
-        "razon_recomendacion": "Protección con seguro: Conserva la ganancia si el mercado te favorece."
+        "razon_recomendacion": "Protección asimétrica: Te cubre contra devaluaciones y mantiene abierta la ganancia si el peso se aprecia."
     })
 
     return {
@@ -258,22 +232,19 @@ def cotizar_estrategias_completas(mercado_info, operacion="compra", plazo_dias=3
     }
 
 
+# Calculamos los escenarios de PnL y las tres metodologias de VaR (Parametrico, Historico y Monte Carlo)
 def calcular_pnl_y_var_estrategia(mercado_info, estrategia_id, operacion="compra", plazo_dias=30, nominal_base=100000.0):
-    """
-    Calcula la matriz de P&L al vencimiento y el Value at Risk (VaR) para la estrategia seleccionada.
-    """
     cotiz = cotizar_estrategias_completas(mercado_info, operacion, plazo_dias, nominal_base)
     es_compra = cotiz["es_compra"]
     fwd_precio = cotiz["fwd_precio"]
     nominal_base = cotiz["nominal_base"]
     nominal_mxn = cotiz["nominal_cotizada"]
 
-    # Extraer parámetros de la estrategia seleccionada
     estrategia = next((o for o in cotiz["opciones"] if o["id"] == estrategia_id), cotiz["opciones"][1])
     precio_pactado = estrategia["precio"]
     prima_pagada = estrategia.get("costo_inicial", 0.0)
 
-    # 1. Matriz de P&L de -15% a +15%
+    # 1. Matriz de escenarios de perdidas y ganancias al vencimiento (-15% a +15%)
     variaciones = [-0.15, -0.10, -0.05, -0.02, 0.0, 0.02, 0.05, 0.10, 0.15]
     escenarios = []
 
@@ -281,14 +252,12 @@ def calcular_pnl_y_var_estrategia(mercado_info, estrategia_id, operacion="compra
         st = round(fwd_precio * (1.0 + v), 4)
 
         if estrategia_id == "opcion":
-            # Perfil no lineal de opción
             if es_compra:
                 payoff_bruto = max(st - precio_pactado, 0.0) * nominal_base
             else:
                 payoff_bruto = max(precio_pactado - st, 0.0) * nominal_base
             pnl_neto = round(payoff_bruto - prima_pagada, 2)
         else:
-            # Perfil lineal Forward / Swap / Futuro / Spot
             if es_compra:
                 pnl_neto = round(nominal_base * (st - precio_pactado), 2)
             else:
@@ -308,7 +277,7 @@ def calcular_pnl_y_var_estrategia(mercado_info, estrategia_id, operacion="compra
             "estado": estado
         })
 
-    # 2. Medición de Value at Risk (VaR)
+    # 2. Estimacion del Value at Risk (VaR)
     retornos = mercado_info["retornos_historicos"]
     sigma_diaria = mercado_info["volatilidad_diaria"]
     mu_diaria = float(np.mean(retornos))
@@ -317,25 +286,24 @@ def calcular_pnl_y_var_estrategia(mercado_info, estrategia_id, operacion="compra
     z_95 = 1.64485
     z_99 = 2.32635
 
-    # A) VaR Paramétrico (Delta-Normal a 1d y 10d)
+    # Metodo 1: VaR Parametrico (Delta-Normal a 1 dia y 10 dias)
     var_p95_1d = z_95 * sigma_diaria * nominal_mxn
     var_p99_1d = z_99 * sigma_diaria * nominal_mxn
     var_p95_10d = z_95 * sigma_10d * nominal_mxn
     var_p99_10d = z_99 * sigma_10d * nominal_mxn
 
-    # Si es opción, la pérdida máxima está acotada por la prima pagada
     if estrategia_id == "opcion":
         var_p95_10d = min(var_p95_10d, prima_pagada)
         var_p99_10d = min(var_p99_10d, prima_pagada)
 
-    # B) VaR Histórico (1 día empírico)
+    # Metodo 2: VaR Historico (usando los percentiles empiricos de la muestra)
     ret_posicion = retornos if es_compra else -retornos
     p5_hist = abs(float(np.percentile(ret_posicion, 5)))
     p1_hist = abs(float(np.percentile(ret_posicion, 1)))
     var_h95_1d = p5_hist * nominal_mxn
     var_h99_1d = p1_hist * nominal_mxn
 
-    # C) VaR Monte Carlo (10 días con 12,500 simulaciones)
+    # Metodo 3: VaR Monte Carlo con 12,500 simulaciones
     n_sim = 12500
     np.random.seed(42)
     shocks = np.random.normal(0, 1, n_sim)
@@ -344,7 +312,6 @@ def calcular_pnl_y_var_estrategia(mercado_info, estrategia_id, operacion="compra
     sim_pnl_mxn = sim_pnl_pct * nominal_mxn
 
     if estrategia_id == "opcion":
-        # Ajuste de payoff para Monte Carlo en opción
         st_sims = fwd_precio * (1.0 + sim_ret_10d)
         if es_compra:
             sim_pnl_mxn = np.maximum(st_sims - precio_pactado, 0.0) * nominal_base - prima_pagada
