@@ -44,7 +44,6 @@ Abre automáticamente el navegador en `http://localhost:8000`.
 - `app_derivados_fx.py`: Servidor web local y endpoints de mercado y riesgo.
 - `mercado_live.py`: Conexión a Yahoo Finance y curvas de tasas.
 - `motor_derivados.py`: Valuación cuantitativa (Spot, Swap, Forward, Futuro, Opciones y VaR).
-- `aplicacion_derivados_fx.ipynb`: Cuaderno con la teoría matemática y fórmulas explicadas.
 - `historico_usdmxn.csv`: Serie de precios de referencia.
 - `run.py`, `run.sh`, `run.bat`: Lanzadores automáticos para Mac y Windows.
 - `requirements.txt`: Librerías requeridas.
