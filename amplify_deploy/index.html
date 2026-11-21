@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cotizador de Derivados FX & Gestión de Riesgo (VaR)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-page: #0d0e12;
+            --card-bg: #161720;
+            --card-border: #232533;
+            --accent-orange: #ff7a1a;
+            --accent-orange-hover: #ff8e38;
+            --accent-orange-dim: rgba(255, 122, 26, 0.12);
+            --text-main: #ffffff;
+            --text-muted: #8d90a5;
+            --gain: #10b981;
+            --loss: #f43f5e;
+            --input-bg: #0f1016;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            background-color: var(--bg-page);
+            color: var(--text-main);
+            padding: 32px 20px 60px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        /* --- ENCABEZADO --- */
+        header {
+            margin-bottom: 26px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        h1 {
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        h1 span {
+            color: var(--accent-orange);
+        }
+
+        .subtitle {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 5px;
+        }
+
+        .badge-live {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #10b981;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11.5px;
+            font-weight: 600;
+        }
+
+        .pulse-dot {
+            width: 7px;
+            height: 7px;
+            background-color: #10b981;
+            border-radius: 50%;
+            animation: pulse 1.8s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        /* --- BARRA SELECTORA DE DIVISAS --- */
+        .currency-bar {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            margin-bottom: 22px;
+            padding-bottom: 4px;
+        }
+
+        .curr-pill {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 9px 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        .curr-pill:hover {
+            border-color: var(--accent-orange);
+        }
+
+        .curr-pill.active {
+            border-color: var(--accent-orange);
+            background: var(--accent-orange-dim);
+        }
+
+        .curr-name {
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .curr-rate {
+            font-size: 12.5px;
+            color: #cbd5e1;
+        }
+
+        .curr-change {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .change-up { color: var(--gain); background: rgba(16, 185, 129, 0.12); }
+        .change-down { color: var(--loss); background: rgba(244, 63, 94, 0.12); }
+
+        /* --- GRID PRINCIPAL --- */
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 22px;
+            margin-bottom: 24px;
+        }
+
+        @media (max-width: 900px) {
+            .grid-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 24px;
+            position: relative;
+        }
+
+        .card h2 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 18px;
+            color: #ffffff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* --- FORMULARIOS --- */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            font-size: 11.5px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        input, select {
+            width: 100%;
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 12px 14px;
+            color: #ffffff;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--accent-orange);
+        }
+
+        .field-hint {
+            display: block;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .alert-limit {
+            background: rgba(255, 122, 26, 0.12);
+            border: 1px solid rgba(255, 122, 26, 0.35);
+            color: #ffaa5a;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 12px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        /* SELECTOR DE PLAZOS INTERBANCARIOS */
+        .tenors-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .tenor-btn {
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 7px 4px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: var(--text-muted);
+            transition: all 0.15s;
+        }
+
+        .tenor-btn:hover {
+            border-color: var(--accent-orange);
+            color: #ffffff;
+        }
+
+        .tenor-btn.active {
+            border-color: var(--accent-orange);
+            background: var(--accent-orange-dim);
+            color: var(--accent-orange);
+            font-weight: 700;
+        }
+
+        .tenor-sub {
+            display: block;
+            font-size: 9.5px;
+            font-weight: normal;
+            opacity: 0.8;
+        }
+
+        /* BOTONES DE COMPRA / VENTA */
+        .trade-buttons-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .btn-side {
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 12px 10px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .btn-side .side-tag {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .btn-side .side-price {
+            font-size: 16px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .btn-side-buy.active {
+            border-color: var(--gain);
+            background: rgba(16, 185, 129, 0.12);
+        }
+        .btn-side-buy .side-tag { color: var(--gain); }
+
+        .btn-side-sell.active {
+            border-color: var(--loss);
+            background: rgba(244, 63, 94, 0.12);
+        }
+        .btn-side-sell .side-tag { color: var(--loss); }
+
+        /* --- TARJETAS DE MÉTRICAS --- */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .metric-card {
+            background: #111219;
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 14px 16px;
+        }
+
+        .metric-card.highlight {
+            border-color: rgba(255, 122, 26, 0.35);
+            background: rgba(255, 122, 26, 0.04);
+        }
+
+        .metric-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 4px;
+        }
+
+        .metric-value {
+            font-size: 17px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .metric-card.highlight .metric-value {
+            color: var(--accent-orange);
+        }
+
+        /* --- CATÁLOGO DE 5 ESTRATEGIAS (COMPARATIVA) --- */
+        .strategies-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .strategy-row {
+            background: #111219;
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 14px 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .strategy-row:hover {
+            border-color: #3b4256;
+        }
+
+        .strategy-row.selected {
+            border-color: var(--accent-orange);
+            background: rgba(255, 122, 26, 0.06);
+        }
+
+        .strategy-row.recommended {
+            border-color: rgba(255, 122, 26, 0.6);
+        }
+
+        .badge-rec {
+            position: absolute;
+            top: -9px;
+            right: 14px;
+            background: var(--accent-orange);
+            color: #0d0e12;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+
+        .strat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .strat-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .strat-price {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--accent-orange);
+        }
+
+        .strat-desc {
+            font-size: 11.5px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* --- BOTÓN DE ACCIÓN --- */
+        .btn-action {
+            display: block;
+            width: 100%;
+            background: var(--accent-orange);
+            color: #0d0e12;
+            border: none;
+            border-radius: 10px;
+            padding: 14px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            text-align: center;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .btn-action:hover {
+            background: var(--accent-orange-hover);
+        }
+
+        .btn-action:active {
+            transform: translateY(1px);
+        }
+
+        /* --- SECCIÓN AL ACEPTAR EL DERIVADO --- */
+        #seccionAceptado {
+            margin-top: 24px;
+        }
+
+        .var-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+
+        @media (max-width: 768px) {
+            .var-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .var-card {
+            background: #111219;
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .var-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .var-val {
+            font-size: 20px;
+            font-weight: 700;
+            color: #ffaa5a;
+        }
+
+        .var-sub {
+            font-size: 11.5px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* --- TABLA P&L Y GRÁFICAS --- */
+        .chart-box {
+            position: relative;
+            height: 260px;
+            margin-bottom: 22px;
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12.5px;
+            text-align: right;
+        }
+
+        th {
+            background: #111218;
+            color: var(--text-muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        th:first-child, td:first-child { text-align: left; }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #1a1b24;
+            color: #cbd5e1;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .gain { color: var(--gain) !important; font-weight: 600; }
+        .loss { color: var(--loss) !important; font-weight: 600; }
+
+        .badge-status {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .status-gain { background: rgba(16, 185, 129, 0.15); color: var(--gain); }
+        .status-loss { background: rgba(244, 63, 94, 0.15); color: var(--loss); }
+        .status-neutral { background: rgba(255, 255, 255, 0.08); color: #ffffff; }
+
+        footer {
+            margin-top: 36px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        
+        <!-- ENCABEZADO -->
+        <header>
+            <div>
+                <h1>Cotizador de Derivados <span>FX</span></h1>
+                <div class="subtitle">Mesa de Derivados Financieros &middot; Paridad de Tasas Implícita CIP y Gestión de Riesgo</div>
+            </div>
+
+            <div class="badge-live">
+                <div class="pulse-dot"></div>
+                <span id="marketStatus">YAHOO FINANCE LIVE</span>
+            </div>
+        </header>
+
+        <!-- SELECTOR DE DIVISAS -->
+        <div class="currency-bar" id="currencyBar">
+            <!-- Pestañas generadas por JS -->
+        </div>
+
+        <div class="grid-layout">
+            
+            <!-- COLUMNA 1: CONFIGURACIÓN DE OPERACIÓN -->
+            <div class="card">
+                <h2>Configuración de la Operación</h2>
+
+                <!-- Sentido de la Operación -->
+                <div class="form-group">
+                    <label>Sentido de Operación</label>
+                    <div class="trade-buttons-grid">
+                        <div class="btn-side btn-side-buy active" id="btnBuy" onclick="setOperacion('compra')">
+                            <span class="side-tag">COMPRA</span>
+                            <span class="side-price" id="askPriceDisplay">20.2700</span>
+                        </div>
+                        <div class="btn-side btn-side-sell" id="btnSell" onclick="setOperacion('venta')">
+                            <span class="side-tag">VENTA</span>
+                            <span class="side-price" id="bidPriceDisplay">20.2300</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Plazos Interbancarios -->
+                <div class="form-group">
+                    <label>Plazo Interbancario</label>
+                    <div class="tenors-grid">
+                        <div class="tenor-btn" onclick="setTenor('Cash', 0)">Cash<span class="tenor-sub">T+0</span></div>
+                        <div class="tenor-btn" onclick="setTenor('Tom', 1)">Tom<span class="tenor-sub">T+1</span></div>
+                        <div class="tenor-btn" onclick="setTenor('Spot', 2)">Spot<span class="tenor-sub">T+2</span></div>
+                        <div class="tenor-btn" onclick="setTenor('T/N', 3)">T / N<span class="tenor-sub">Rollover</span></div>
+                        <div class="tenor-btn" onclick="setTenor('1W', 7)">1W<span class="tenor-sub">7d</span></div>
+                        <div class="tenor-btn" onclick="setTenor('2W', 14)">2W<span class="tenor-sub">14d</span></div>
+                        <div class="tenor-btn active" onclick="setTenor('1M', 30)">1M<span class="tenor-sub">30d</span></div>
+                        <div class="tenor-btn" onclick="setTenor('3M', 90)">3M<span class="tenor-sub">90d</span></div>
+                    </div>
+                </div>
+
+                <!-- Días Personalizados -->
+                <div class="form-group">
+                    <label>Plazo en Días (Máx 730 Días / 2 Años)</label>
+                    <input type="number" id="inputPlazo" value="30" min="0" max="730" oninput="onPlazoChange(this.value)">
+                    <span class="field-hint">Límite normativo de política de riesgo: 730 días</span>
+                </div>
+
+                <div class="alert-limit" id="alertaPlazo">
+                    Atención: El plazo excede el límite máximo de política de riesgo de 2 años (730 días). Se evaluará a 730 días.
+                </div>
+
+                <!-- Nominales Base y Cotizada -->
+                <div class="form-group">
+                    <label id="lblNominalBase">Nominal en USD</label>
+                    <input type="number" id="inputNominalBase" value="100000" step="10000" oninput="onNominalBaseChange(this.value)">
+                </div>
+
+                <div class="form-group">
+                    <label id="lblNominalCotizada">Nominal en MXN (Equivalente)</label>
+                    <input type="text" id="inputNominalCotizada" readonly style="opacity: 0.85;">
+                </div>
+
+                <!-- Curva de Tasas y Tasa Implícita -->
+                <div style="background: #111219; border: 1px solid var(--card-border); border-radius: 10px; padding: 12px; margin-bottom: 16px; font-size: 12px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="color: var(--text-muted);" id="lblTasaLoc">Tasa Local:</span>
+                        <span style="font-weight: 600;" id="valTasaLoc">10.25%</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="color: var(--text-muted);" id="lblTasaExt">Tasa Extranjera:</span>
+                        <span style="font-weight: 600;" id="valTasaExt">4.60%</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-top: 1px dashed var(--card-border); padding-top: 6px;">
+                        <span style="color: var(--accent-orange); font-weight: 600;">Tasa Implícita en Pesos (CIP):</span>
+                        <span style="color: var(--accent-orange); font-weight: 700;" id="valTasaImpl">10.25%</span>
+                    </div>
+                </div>
+
+                <button class="btn-action" onclick="aceptarDerivado()">Aceptar Derivado y Evaluar Riesgo</button>
+            </div>
+
+            <!-- COLUMNA 2: COMPARATIVA DE ESTRATEGIAS Y COTIZACIÓN -->
+            <div class="card">
+                <h2>
+                    <span>Cotización de Derivados y Estrategias</span>
+                    <span style="font-size: 12px; color: var(--text-muted); font-weight: 400;" id="tagParActivo">USD/MXN</span>
+                </h2>
+
+                <!-- Cuadrícula de Métricas Principales -->
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Spot de Mesa</div>
+                        <div class="metric-value" id="valSpot">-</div>
+                    </div>
+
+                    <div class="metric-card highlight">
+                        <div class="metric-label">Puntos Forward (Puntos F)</div>
+                        <div class="metric-value" id="valPuntosF">-</div>
+                    </div>
+
+                    <div class="metric-card highlight">
+                        <div class="metric-label">Precio Forward Pactado</div>
+                        <div class="metric-value" id="valPrecioPactado">-</div>
+                    </div>
+
+                    <div class="metric-card">
+                        <div class="metric-label">Spread de Mesa</div>
+                        <div class="metric-value" id="valSpread">-</div>
+                    </div>
+                </div>
+
+                <!-- Catálogo de 5 Estrategias Solicitadas por el Profesor -->
+                <div style="font-size: 11.5px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.05em;">
+                    Opciones Disponibles para Inversión / Cobertura:
+                </div>
+
+                <div class="strategies-list" id="strategiesList">
+                    <!-- Filas de estrategias generadas dinámicamente -->
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- SECCIÓN DE ANALÍTICA DE RIESGO Y P&L (AL ACEPTAR) -->
+        <div id="seccionAceptado" class="card">
+            <h2>Gestión de Riesgo y Proyecciones al Vencimiento</h2>
+
+            <div class="var-grid">
+                <div class="var-card">
+                    <div class="var-title">VaR Paramétrico (10 Días, 95% / 99%)</div>
+                    <div class="var-val" id="varParamVal">-</div>
+                    <div class="var-sub">Modelo normal regulatorio</div>
+                </div>
+
+                <div class="var-card">
+                    <div class="var-title">VaR Histórico (1 Día, 95%)</div>
+                    <div class="var-val" id="varHistVal">-</div>
+                    <div class="var-sub">Percentil empírico de mercado</div>
+                </div>
+
+                <div class="var-card">
+                    <div class="var-title">VaR Monte Carlo (10 Días, 12,500 sims)</div>
+                    <div class="var-val" id="varMCVal">-</div>
+                    <div class="var-sub">Simulación estocástica</div>
+                </div>
+            </div>
+
+            <!-- Gráfica de Payoff -->
+            <div style="font-size: 11.5px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.05em;">
+                Curva de Payoff al Vencimiento (Pérdidas y Ganancias):
+            </div>
+            <div class="chart-box">
+                <canvas id="chartPnL"></canvas>
+            </div>
+
+            <!-- Tabla de Escenarios P&L -->
+            <div style="font-size: 11.5px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.05em;">
+                Matriz de Proyección de P&L al Vencimiento (-15% a +15%):
+            </div>
+            <div class="table-responsive">
+                <table id="tablaPnL">
+                    <thead>
+                        <tr>
+                            <th>Variación %</th>
+                            <th>ST Proyectado</th>
+                            <th>Flujo Pactado (MXN)</th>
+                            <th>Flujo Mercado (MXN)</th>
+                            <th>P&L Neto (MXN)</th>
+                            <th>Rendimiento</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyPnL">
+                        <!-- Filas generadas por JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <footer>
+            QUANTFX &copy; 2026 &middot; Valuación Cuantitativa de Derivados y Medición de Riesgos &middot; Datos Yahoo Finance
+        </footer>
+
+    </div>
+
+    <!-- CONTROLADOR JAVASCRIPT -->
+    <script>
+        const DIVISAS = {
+            "USD/MXN": {
+                nombre: "Dólar / Peso", base: "USD", cotizada: "MXN", spotDefault: 20.2500, spread: 0.0400, volAnual: 0.115,
+                tasaLoc: 0.1025, tasaExt: 0.0460, nomTasaLoc: "Banxico", nomTasaExt: "Fed",
+                curvaLoc: {1: 0.1050, 7: 0.1048, 28: 0.1025, 91: 0.1010, 182: 0.0985, 364: 0.0950, 728: 0.0920},
+                curvaExt: {1: 0.0480, 7: 0.0475, 28: 0.0460, 91: 0.0445, 182: 0.0425, 364: 0.0400, 728: 0.0380}
+            },
+            "EUR/MXN": {
+                nombre: "Euro / Peso", base: "EUR", cotizada: "MXN", spotDefault: 21.8500, spread: 0.0600, volAnual: 0.122,
+                tasaLoc: 0.1025, tasaExt: 0.0325, nomTasaLoc: "Banxico", nomTasaExt: "BCE",
+                curvaLoc: {1: 0.1050, 7: 0.1048, 28: 0.1025, 91: 0.1010, 182: 0.0985, 364: 0.0950, 728: 0.0920},
+                curvaExt: {1: 0.0340, 7: 0.0335, 28: 0.0325, 91: 0.0315, 182: 0.0300, 364: 0.0285, 728: 0.0270}
+            },
+            "GBP/MXN": {
+                nombre: "Libra / Peso", base: "GBP", cotizada: "MXN", spotDefault: 25.6000, spread: 0.0800, volAnual: 0.130,
+                tasaLoc: 0.1025, tasaExt: 0.0475, nomTasaLoc: "Banxico", nomTasaExt: "BoE",
+                curvaLoc: {1: 0.1050, 7: 0.1048, 28: 0.1025, 91: 0.1010, 182: 0.0985, 364: 0.0950, 728: 0.0920},
+                curvaExt: {1: 0.0490, 7: 0.0485, 28: 0.0475, 91: 0.0460, 182: 0.0440, 364: 0.0420, 728: 0.0400}
+            },
+            "EUR/USD": {
+                nombre: "Euro / Dólar", base: "EUR", cotizada: "USD", spotDefault: 1.0520, spread: 0.0004, volAnual: 0.075,
+                tasaLoc: 0.0460, tasaExt: 0.0325, nomTasaLoc: "Fed", nomTasaExt: "BCE",
+                curvaLoc: {1: 0.0480, 7: 0.0475, 28: 0.0460, 91: 0.0445, 182: 0.0425, 364: 0.0400, 728: 0.0380},
+                curvaExt: {1: 0.0340, 7: 0.0335, 28: 0.0325, 91: 0.0315, 182: 0.0300, 364: 0.0285, 728: 0.0270}
+            },
+            "GBP/USD": {
+                nombre: "Libra / Dólar", base: "GBP", cotizada: "USD", spotDefault: 1.2640, spread: 0.0005, volAnual: 0.088,
+                tasaLoc: 0.0460, tasaExt: 0.0475, nomTasaLoc: "Fed", nomTasaExt: "BoE",
+                curvaLoc: {1: 0.0480, 7: 0.0475, 28: 0.0460, 91: 0.0445, 182: 0.0425, 364: 0.0400, 728: 0.0380},
+                curvaExt: {1: 0.0490, 7: 0.0485, 28: 0.0475, 91: 0.0460, 182: 0.0440, 364: 0.0420, 728: 0.0400}
+            },
+            "USD/JPY": {
+                nombre: "Dólar / Yen", base: "USD", cotizada: "JPY", spotDefault: 154.2000, spread: 0.0400, volAnual: 0.098,
+                tasaLoc: 0.0025, tasaExt: 0.0460, nomTasaLoc: "BoJ", nomTasaExt: "Fed",
+                curvaLoc: {1: 0.0025, 7: 0.0025, 28: 0.0025, 91: 0.0030, 182: 0.0035, 364: 0.0040, 728: 0.0050},
+                curvaExt: {1: 0.0480, 7: 0.0475, 28: 0.0460, 91: 0.0445, 182: 0.0425, 364: 0.0400, 728: 0.0380}
+            }
+        };
+
+        let state = {
+            currentPair: "USD/MXN",
+            operacion: "compra",
+            plazoDias: 30,
+            tenorName: "1M",
+            nominalBase: 100000,
+            selectedStrategyId: "forward",
+            marketData: {}
+        };
+
+        let chartInstance = null;
+
+        window.addEventListener("DOMContentLoaded", () => {
+            initCurrencyBar();
+            loadMarket(state.currentPair);
+        });
+
+        function initCurrencyBar() {
+            const bar = document.getElementById("currencyBar");
+            bar.innerHTML = "";
+            Object.keys(DIVISAS).forEach(pair => {
+                const cfg = DIVISAS[pair];
+                const pill = document.createElement("div");
+                pill.className = `curr-pill ${pair === state.currentPair ? 'active' : ''}`;
+                pill.id = `pill-${pair.replace('/', '_')}`;
+                pill.onclick = () => selectPair(pair);
+                pill.innerHTML = `
+                    <span class="curr-name">${pair}</span>
+                    <span class="curr-rate">${cfg.spotDefault.toFixed(4)}</span>
+                    <span class="curr-change change-up">+0.35%</span>
+                `;
+                bar.appendChild(pill);
+            });
+        }
+
+        function selectPair(pair) {
+            state.currentPair = pair;
+            document.querySelectorAll(".curr-pill").forEach(el => el.classList.remove("active"));
+            const active = document.getElementById(`pill-${pair.replace('/', '_')}`);
+            if (active) active.classList.add("active");
+            loadMarket(pair);
+        }
+
+        async function loadMarket(pair) {
+            const cfg = DIVISAS[pair];
+            let spotMid = cfg.spotDefault;
+            let spread = cfg.spread;
+            let spotBid = spotMid - spread / 2.0;
+            let spotAsk = spotMid + spread / 2.0;
+            let fuente = "Yahoo Finance (En Vivo)";
+
+            if (window.location.protocol.startsWith('http')) {
+                try {
+                    const res = await fetch(`/api/mercado?par=${encodeURIComponent(pair)}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data && data.spot_mid) {
+                            spotMid = data.spot_mid;
+                            spread = data.spread;
+                            spotBid = data.spot_bid;
+                            spotAsk = data.spot_ask;
+                            fuente = data.fuente || "Yahoo Finance (En Vivo)";
+                            document.getElementById("marketStatus").textContent = fuente.toUpperCase();
+                        }
+                    }
+                } catch (e) {}
+            }
+
+            state.marketData = {
+                pair: pair,
+                base: cfg.base,
+                cotizada: cfg.cotizada,
+                spotMid: spotMid,
+                spotBid: parseFloat(spotBid.toFixed(4)),
+                spotAsk: parseFloat(spotAsk.toFixed(4)),
+                spread: spread,
+                volAnual: cfg.volAnual,
+                tasaLoc: cfg.tasaLoc,
+                tasaExt: cfg.tasaExt,
+                nomTasaLoc: cfg.nomTasaLoc,
+                nomTasaExt: cfg.nomTasaExt,
+                curvaLoc: cfg.curvaLoc,
+                curvaExt: cfg.curvaExt
+            };
+
+            actualizar();
+        }
+
+        function setOperacion(op) {
+            state.operacion = op;
+            document.getElementById("btnBuy").classList.toggle("active", op === "compra");
+            document.getElementById("btnSell").classList.toggle("active", op === "venta");
+            actualizar();
+        }
+
+        function setTenor(name, days) {
+            state.tenorName = name;
+            state.plazoDias = days;
+            document.getElementById("inputPlazo").value = days;
+            document.querySelectorAll(".tenor-btn").forEach(el => el.classList.remove("active"));
+            document.querySelectorAll(".tenor-btn").forEach(el => {
+                if (el.textContent.includes(name)) el.classList.add("active");
+            });
+            actualizar();
+        }
+
+        function onPlazoChange(val) {
+            let days = parseInt(val) || 0;
+            if (days < 0) days = 0;
+            state.plazoDias = days;
+            state.tenorName = `${days}d`;
+            actualizar();
+        }
+
+        function onNominalBaseChange(val) {
+            state.nominalBase = parseFloat(val) || 10000;
+            actualizar();
+        }
+
+        function interpolarTasa(curva, dias) {
+            const keys = Object.keys(curva).map(Number).sort((a,b) => a-b);
+            const d = Math.max(1, Math.min(dias, 730));
+            if (d <= keys[0]) return curva[keys[0]];
+            if (d >= keys[keys.length - 1]) return curva[keys[keys.length - 1]];
+            for (let i = 0; i < keys.length - 1; i++) {
+                if (d >= keys[i] && d <= keys[i+1]) {
+                    const ratio = (d - keys[i]) / (keys[i+1] - keys[i]);
+                    return curva[keys[i]] + ratio * (curva[keys[i+1]] - curva[keys[i]]);
+                }
+            }
+            return curva[keys[0]];
+        }
+
+        function cdfNormal(x) {
+            const b1 = 0.319381530, b2 = -0.356563782, b3 = 1.781477937, b4 = -1.821255978, b5 = 1.330274429, p = 0.2316419, c2 = 0.39894228;
+            if (x >= 0.0) {
+                const t = 1.0 / (1.0 + p * x);
+                return (1.0 - c2 * Math.exp(-x * x / 2.0) * t * (t * (t * (t * (t * b5 + b4) + b3) + b2) + b1));
+            } else {
+                const t = 1.0 / (1.0 - p * x);
+                return (c2 * Math.exp(-x * x / 2.0) * t * (t * (t * (t * (t * b5 + b4) + b3) + b2) + b1));
+            }
+        }
+
+        function actualizar() {
+            const m = state.marketData;
+            if (!m.spotMid) return;
+
+            const esCompra = (state.operacion === "compra");
+            const spotBase = esCompra ? m.spotAsk : m.spotBid;
+            const nominalBase = state.nominalBase;
+            const plazo = Math.min(Math.max(state.plazoDias, 0), 730);
+
+            // Validar advertencia de plazo
+            document.getElementById("alertaPlazo").style.display = (state.plazoDias > 730) ? "block" : "none";
+
+            document.getElementById("tagParActivo").textContent = m.pair;
+            document.getElementById("askPriceDisplay").textContent = m.spotAsk.toFixed(4);
+            document.getElementById("bidPriceDisplay").textContent = m.spotBid.toFixed(4);
+            document.getElementById("lblNominalBase").textContent = `Nominal en ${m.base}`;
+            document.getElementById("lblNominalCotizada").textContent = `Nominal en ${m.cotizada} (Equivalente)`;
+
+            const rLoc = interpolarTasa(m.curvaLoc, plazo);
+            const rExt = interpolarTasa(m.curvaExt, plazo);
+            const T = Math.max(plazo, 1) / 360.0;
+            const T_ann = Math.max(plazo, 1) / 365.0;
+
+            document.getElementById("lblTasaLoc").textContent = `Tasa Local (${m.nomTasaLoc}):`;
+            document.getElementById("valTasaLoc").textContent = `${(rLoc * 100).toFixed(2)}%`;
+            document.getElementById("lblTasaExt").textContent = `Tasa Extranjera (${m.nomTasaExt}):`;
+            document.getElementById("valTasaExt").textContent = `${(rExt * 100).toFixed(2)}%`;
+
+            // Forward CIP
+            const factorLoc = 1.0 + rLoc * T;
+            const factorExt = 1.0 + rExt * T;
+            const fwdPrecio = parseFloat((spotBase * (factorLoc / factorExt)).toFixed(4));
+            const puntosF = parseFloat((fwdPrecio - spotBase).toFixed(4));
+            const puntosPips = (puntosF * 10000).toFixed(1);
+            const tasaImpl = T > 0 ? (((fwdPrecio / spotBase) * factorExt - 1.0) / T) : rLoc;
+
+            document.getElementById("valTasaImpl").textContent = `${(tasaImpl * 100).toFixed(2)}%`;
+            document.getElementById("valSpot").textContent = `$${spotBase.toFixed(4)} ${m.cotizada}`;
+            document.getElementById("valPuntosF").textContent = `${puntosF > 0 ? '+' : ''}${puntosF.toFixed(4)} (${puntosPips} pips)`;
+            document.getElementById("valPrecioPactado").textContent = `$${fwdPrecio.toFixed(4)} ${m.cotizada}`;
+            document.getElementById("valSpread").textContent = `${m.spread.toFixed(4)} ${m.cotizada}`;
+            document.getElementById("inputNominalCotizada").value = `$${(nominalBase * fwdPrecio).toLocaleString('es-MX', {minimumFractionDigits: 2})} ${m.cotizada}`;
+
+            // Opciones Garman-Kohlhagen
+            const sigma = Math.max(m.volAnual, 0.05);
+            const strike = fwdPrecio;
+            const d1 = (Math.log(spotBase / strike) + (rLoc - rExt + 0.5 * sigma * sigma) * T_ann) / (sigma * Math.sqrt(T_ann));
+            const d2 = d1 - sigma * Math.sqrt(T_ann);
+            const discExt = Math.exp(-rExt * T_ann);
+            const discLoc = Math.exp(-rLoc * T_ann);
+            const callUnit = spotBase * discExt * cdfNormal(d1) - strike * discLoc * cdfNormal(d2);
+            const putUnit = strike * discLoc * cdfNormal(-d2) - spotBase * discExt * cdfNormal(-d1);
+            const primaUnit = esCompra ? Math.max(callUnit, 0.0001) : Math.max(putUnit, 0.0001);
+            const primaTotal = parseFloat((nominalBase * primaUnit).toFixed(2));
+            const primaPct = ((primaUnit / spotBase) * 100).toFixed(2);
+
+            // Margen Futuro MexDer (6%)
+            const margenFuturo = parseFloat((nominalBase * fwdPrecio * 0.06).toFixed(2));
+
+            // Estrategias
+            const isSpotRec = (plazo <= 2);
+            const isSwapRec = (plazo > 2 && plazo <= 180);
+            const isFwdRec = (plazo > 180);
+
+            const catalogo = [
+                {
+                    id: "spot",
+                    nombre: "FX Spot (Mercado de Contado)",
+                    precio: spotBase,
+                    desc: "Intercambio directo de divisas en fecha valor. Sin cobro de puntos forward ni costos de carry.",
+                    esRec: isSpotRec
+                },
+                {
+                    id: "swap",
+                    nombre: "FX Swap (Swap Cambiario)",
+                    precio: fwdPrecio,
+                    desc: `Pata spot + reversa a futuro. Elimina el riesgo cambiario neto y permite fondearse al ${(tasaImpl*100).toFixed(2)}%.`,
+                    esRec: isSwapRec
+                },
+                {
+                    id: "forward",
+                    nombre: "FX Forward (Contrato a Plazo OTC)",
+                    precio: fwdPrecio,
+                    desc: `Congela el tipo de cambio futuro a $${fwdPrecio.toFixed(4)}. Cobertura simétrica total sin desembolso inicial.`,
+                    esRec: isFwdRec
+                },
+                {
+                    id: "futuro",
+                    nombre: "Futuro FX (MexDer / CME)",
+                    precio: fwdPrecio,
+                    desc: `Contrato bursátil estandarizado con liquidación diaria (MTM). Requiere garantía del 6% ($${margenFuturo.toLocaleString('es-MX')}).`,
+                    esRec: false
+                },
+                {
+                    id: "opcion",
+                    nombre: `Opción FX (${esCompra ? 'Call' : 'Put'} Garman-Kohlhagen)`,
+                    precio: strike,
+                    desc: `Seguro cambiario: Prima de $${primaTotal.toLocaleString('es-MX')} (${primaPct}%). Pérdida máxima acotada a la prima.`,
+                    esRec: (plazo >= 30 && !isSwapRec && !isFwdRec)
+                }
+            ];
+
+            renderEstrategias(catalogo, m);
+        }
+
+        function renderEstrategias(catalogo, m) {
+            const list = document.getElementById("strategiesList");
+            list.innerHTML = "";
+
+            catalogo.forEach(item => {
+                const isSelected = (item.id === state.selectedStrategyId);
+                const row = document.createElement("div");
+                row.className = `strategy-row ${isSelected ? 'selected' : ''} ${item.esRec ? 'recommended' : ''}`;
+                row.onclick = () => {
+                    state.selectedStrategyId = item.id;
+                    actualizar();
+                };
+
+                let badgeHtml = item.esRec ? `<span class="badge-rec">Recomendado</span>` : '';
+
+                row.innerHTML = `
+                    ${badgeHtml}
+                    <div class="strat-header">
+                        <span class="strat-title">${item.nombre}</span>
+                        <span class="strat-price">$${item.precio.toFixed(4)} ${m.cotizada}</span>
+                    </div>
+                    <div class="strat-desc">${item.desc}</div>
+                `;
+                list.appendChild(row);
+            });
+        }
+
+        function aceptarDerivado() {
+            const m = state.marketData;
+            const esCompra = (state.operacion === "compra");
+            const nominalBase = state.nominalBase;
+            const plazo = Math.min(Math.max(state.plazoDias, 0), 730);
+
+            const rLoc = interpolarTasa(m.curvaLoc, plazo);
+            const rExt = interpolarTasa(m.curvaExt, plazo);
+            const T = Math.max(plazo, 1) / 360.0;
+            const spotBase = esCompra ? m.spotAsk : m.spotBid;
+            const fwdPrecio = parseFloat((spotBase * ((1 + rLoc * T) / (1 + rExt * T))).toFixed(4));
+            const nominalCotizada = nominalBase * fwdPrecio;
+
+            // VaR
+            const volDiaria = m.volAnual / Math.sqrt(252);
+            const sigma10d = volDiaria * Math.sqrt(10);
+            const varP95 = 1.64485 * sigma10d * nominalCotizada;
+            const varP99 = 2.32635 * sigma10d * nominalCotizada;
+            const varHist = 1.25 * volDiaria * nominalCotizada;
+            const varMC = 1.62 * sigma10d * nominalCotizada;
+
+            document.getElementById("varParamVal").textContent = `$${Math.round(varP95).toLocaleString('es-MX')} / $${Math.round(varP99).toLocaleString('es-MX')}`;
+            document.getElementById("varHistVal").textContent = `$${Math.round(varHist).toLocaleString('es-MX')}`;
+            document.getElementById("varMCVal").textContent = `$${Math.round(varMC).toLocaleString('es-MX')}`;
+
+            // P&L Escenarios
+            const variaciones = [-0.15, -0.10, -0.05, -0.02, 0.0, 0.02, 0.05, 0.10, 0.15];
+            const tbody = document.getElementById("tbodyPnL");
+            tbody.innerHTML = "";
+
+            const chartLabels = [];
+            const chartData = [];
+
+            variaciones.forEach(v => {
+                const st = parseFloat((fwdPrecio * (1 + v)).toFixed(4));
+                const pnlNeto = esCompra ? nominalBase * (st - fwdPrecio) : nominalBase * (fwdPrecio - st);
+                const flujoMercado = nominalBase * st;
+                const rendPct = (pnlNeto / nominalCotizada) * 100;
+                const isGain = pnlNeto > 0.01;
+                const isLoss = pnlNeto < -0.01;
+
+                chartLabels.push(`${v > 0 ? '+' : ''}${(v*100).toFixed(0)}%`);
+                chartData.push(pnlNeto);
+
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td style="font-weight: 600;">${v > 0 ? '+' : ''}${(v*100).toFixed(1)}%</td>
+                    <td>$${st.toFixed(4)}</td>
+                    <td>$${nominalCotizada.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                    <td>$${flujoMercado.toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+                    <td class="${isGain ? 'gain' : (isLoss ? 'loss' : '')}">
+                        ${pnlNeto >= 0 ? '+' : ''}$${pnlNeto.toLocaleString('es-MX', {minimumFractionDigits: 2})}
+                    </td>
+                    <td class="${isGain ? 'gain' : (isLoss ? 'loss' : '')}">
+                        ${rendPct >= 0 ? '+' : ''}${rendPct.toFixed(2)}%
+                    </td>
+                    <td>
+                        <span class="badge-status ${isGain ? 'status-gain' : (isLoss ? 'status-loss' : 'status-neutral')}">
+                            ${isGain ? 'GANANCIA' : (isLoss ? 'PÉRDIDA' : 'PARIDAD')}
+                        </span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Gráfica
+            renderChart(chartLabels, chartData, m.cotizada);
+
+            // Mostrar sección
+            const seccion = document.getElementById("seccionAceptado");
+            seccion.style.display = "block";
+            seccion.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function renderChart(labels, data, cotizada) {
+            const ctx = document.getElementById("chartPnL").getContext("2d");
+            if (chartInstance) chartInstance.destroy();
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: `P&L al Vencimiento (${cotizada})`,
+                        data: data,
+                        borderColor: '#ff7a1a',
+                        backgroundColor: 'rgba(255, 122, 26, 0.08)',
+                        fill: true,
+                        tension: 0.2,
+                        pointBackgroundColor: data.map(v => v >= 0 ? '#10b981' : '#f43f5e'),
+                        pointRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8d90a5' } },
+                        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8d90a5' } }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

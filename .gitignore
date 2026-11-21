@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+venv_win/
+.cache_market/
+.DS_Store
+.user_uploaded/
+amplify_deploy.zip
